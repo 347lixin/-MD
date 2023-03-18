@@ -1,0 +1,163 @@
+WIN系统下gromacs的蛋白配体复合物分子动力学模拟
+amber力场
+acpype生成配体拓扑文件
+gmx pdb2gmx -f CD36.pdb -o CD36_processed.gro -p topol.top -ignh
+
+生成蛋白.gro,蛋白.top(也就是topol.top),posre.itp 3个文件
+gmx pdb2gmx -f CD36.pdb -o CD36_processed.gro -ignh
+
+按照complex.gro,topol.top,蛋白.itp,配体.itp准备相关文件
+
+添加盒子                        gmx editconf -f complex.gro -o newbox.gro -bt dodecahedron -d 1.0
+添加水模型                     gmx solvate -cp newbox.gro -cs spc216.gro -p topol.top -o solv.gro    检查SOL位置
+S添加离子                        gmx grompp -f ions.mdp -c solv.gro -p topol.top -o ions.tpr
+平衡电荷                        gmx genion -s ions.tpr -o solv_ions.gro -p topol.top -pname NA -nname CL -neutral 选择15 SOL  
+能量最小化预处理           gmx grompp -f em.mdp -c solv_ions.gro -p topol.top -o em.tpr
+运行能量最小化              gmx mdrun -v -deffnm em
+建立索引                       gmx make_ndx -f genistin.gro -o index_genistin.ndx
+...
+ > 0 & ! a H*
+ > q
+配体构象限制                  gmx genrestr -f genistin.gro -n index_genistin.ndx -o posre_genistin.itp -fc 1000 1000 1000
+3
+
+; Ligand position restraints            #将其复制到topol.top中，配体.itp的下边即可
+#ifdef POSRES
+#include "posre_genistin.itp"
+#endif
+
+gmx make_ndx -f em.gro -o index.ndx
+1 | 13                    #protein|DAIDZEIN
+14 | 15                   #NA/CL|Water
+q
+
+
+
+-------------------------------------NVT，NPT，MD-----------------------------------------------------------
+ ##NVT和NPT文件中，tc-grps需要修改 Protein_DAI CL_Water
+NVT平衡预处理               gmx grompp -f nvt.mdp -c em.gro -r em.gro -p topol.top -n index.ndx -o nvt.tpr    
+运行NVT                         gmx mdrun -v -deffnm nvt
+NPT平衡预处理               gmx grompp -f npt.mdp -c nvt.gro -t nvt.cpt -r nvt.gro -p topol.top -n index.ndx -o npt.tpr -maxwarn 5
+运行NPT                         gmx mdrun -v -deffnm npt
+动力学模拟预处理           gmx grompp -f md.mdp -c npt.gro -t npt.cpt -p topol.top -n index.ndx -o md_0_100.tpr
+运行动力学模拟               gmx mdrun -v -deffnm md_0_100
+
+--------------------------------------轨迹进行周期性矫正------------------------------------------------------
+gmx trjconv -s md_0_100.tpr -f md_0_100.xtc -o md_0_100_nojump.xtc -pbc nojump -ur compact         
+#Choose "Protein" for centering and "System" for output.
+
+或
+
+蛋白质重新居中
+gmx trjconv -s md_0_100.tpr -f md_0_100.xtc -o md_0_100_center.xtc -center -pbc mol -ur compact
+#Choose "Protein" for centering and "System" for output.
+1,0
+
+
+执行移动和平移
+gmx trjconv -s md_0_100.tpr -f md_0_100_center.xtc -o md_0_100_fit.xtc -fit rot+trans
+#Choose "Backbone" to perform least-squares fitting to the protein backbone, and "System" for output.
+4,0
+md_0_100_fit.xtc可以用作gmx_MMPBSA的计算
+
+
+
+#貌似不用做，快照，在用UCSF Chimera创建电影时才需要
+To extract the first frame (t = 0 ns) of the trajectory, use trjconv -dump with the recentered trajectory:
+gmx trjconv -s md_0_100.tpr -f md_0_100_nojump.xtc -o start.pdb -dump 0
+
+
+-----------------------------------------RMSD计算------------------------------------------------------------
+gmx make_ndx -f em.gro -n index.ndx（gromacs官方）
+...
+ > 13 & ! a H*
+ > name 20 DAI_Heavy        #name后面的数字对应DAI_&_!H*
+ > q
+##执行 rms 模块，选择“主干”进行最小二乘拟合，选择“JZ4_Heavy”进行 RMSD 计算。通过这样做，通过拟合去除蛋白质的整体旋转和平移，并且报告的RMSD是JZ4位置相对于蛋白质的变化程度，这是模拟期间结合姿势保存程度的良好指标。
+
+gmx rms -s md_0_100.tpr -f md_0_100_nojump.xtc -o rmsd.xvg -tu ns（B站up特大柚子皮）
+laest square fit 1 protein     RMSD计算 4 backbone
+laest square fit 1 protein     RMSD计算 13 lig
+##这是分开选的，查看蛋白骨架和配体是否分别达到了平衡，可以在输出文件的名字上进行标注
+或gmx rms -s md_0_100.tpr -f md_0_100_center.xtc -o rmsd.xvg -tu ns（gromacs官方&youtube博主Learn-at-ease）
+
+-s参数之后的tpr文件就是我们设定的参考结构了（微信公众号杜艾维）
+根据你的需要来选择需要进行对齐的对象和计算RMSD的对象，比如说你需要计算蛋白质的RMSD，那一般可以选择Protein，或者backbone等蛋白质相关的组进行对齐和RMSD的计算；选择backbone的话，可以一定程度上减少柔性R基团对RMSD数据带来的“噪音”。
+
+#(Select appropritate 2 options one by one and then open the output files in Grace) Select Backbone and then LIG
+
+xmgrace rmsd.xvg rmsd1.xvg出来的图就会有重叠到一起
+
+----------------------------------RMSF计算--------------------------------------------------------------------
+gmx rmsf -s md_0_100.tpr -f md_0_100_center.xtc -o rmsf.xvg（youtube博主Learn-at-ease）
+13
+
+(Select appropritate Backbone open the output files in Grace)
+
+xmgrace rmsf.xvg
+
+#rmsf
+gmx rmsf -s md_0_100.tpr -f md_0_100_noPBC.xtc -o fws-rmsf.xvg -ox fws-avg.pdb -res -oq fws-bfac.pdb（B站特大柚子皮）
+
+
+
+-------------------------------------gyrate----------------------------------------------------------------------
+gmx gyrate -s md_0_100.tpr -f md_0_100_nojump.xtc -o gyrate.xvg（自己认为的）
+1 protein
+gmx gyrate -s md_0_100.tpr -f md_0_100_noPBC.xtc -o gyrate.xvg（B站up特大柚子皮）
+gmx gyrate -s md_0_100.tpr -f md_0_100_center.xtc -o gyrate.xvg（youtube博主Learn-at-ease）
+
+
+--------------------------------------氢键-----------------------------------------------------------------------
+gmx hbond -f md_0_100_nojump.xtc -s md_0_100.tpr -num hbond_num.xvg -ang hbond_ang.xvg -life hbond_life.xvg -dist hb（自己人为的）
+gmx hbond -f md_0_100_noPBC.xtc -s md_0_100.tpr -num hbond_num.xvg -ang hbond_ang.xvg -life hbond_life.xvg -dist hb（B站up特大柚子皮）
+gmx hbond -s md_0_100.tpr -f md_0_100_center.xtc -num hb.xvg -tu ns（youtube博主Learn-at-ease给出的口令）
+1 Protein
+13 lig
+
+
+-------------------------------------SASA------------------------------------------------------------------------
+gmx sasa -f md_0_100_center.xtc -s md_0_100.tpr -o area.xvg
+选SOL
+
+
+
+------------------------------------能量计算----------------------------------------------------------------------
+gmx energy -f md_0_100.edr -o energy.xvg
+#Choose the option of your choice
+xmgrace -nxy energy1.xvg
+--------------------------------蛋白质-配体相互作用能量---------------------------------------------------------------
+gmx grompp -f ie.mdp -c npt.gro -t npt.cpt -p topol.top -n index.ndx -o ie.tpr（这儿的索引是哪个索引，是最开始的索引还是计算RMSD的索引）
+gmx mdrun -deffnm ie -rerun md_0_10.xtc -nb cpu
+gmx energy -f ie.edr -o interaction_energy.xvg
+Coul-SR：Protein-JZ4和LJ-SR：Protein-JZ4
+
+-----------------------------------绘制自由能形貌图-------------------------------------------------------------------
+#sham.xvg为回旋半径和RMSD的数据文件的组合，第一列为时间，第二列第三列为相应时间下的回旋半径和RMSD数据
+gmx sham -f sham.xvg -ls FEL_sham.xpm -b 8500 -tsham 310 -nlevels 100
+#利用DuIvyTools绘图
+dit xpm_show -f FEL_sham.xpm -3d -o FEL_sham.pdf
+
+-----------------------------------gmx_MMPBSA--------------------------------------------------------------------------
+conda activate gmxMMPBSA
+cd /mnt/c/DAI_2/daizin test
+mpirun -np 2 gmx_MMPBSA -O -i mmpbsa.in -cs md_0_100.tpr -ci index.ndx -cg 1 13 -ct md_0_100_center_fix.xtc -cp topol.top -o FINAL_RESULTS_MMPBSA.dat -eo FINAL_RESULTS_MMPBSA.csv
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,97 @@
+相关资料来源于B站up主惠成功博士
+Ubuntu 20.04.5 LTS
+
+GMX installation
+GMX Version 2021.2
+
+
+# Install pre-request
+sudo apt update
+sudo apt install build-essential 
+sudo apt install cmake
+
+# check system
+# check gcc compiler
+gcc --version
+# 如果不支持新版的gcc，可以手动安装一个老版本gcc
+sudo apt install gcc-8
+
+# check CPU information, such as SIMD
+lscpu
+
+
+# check nvidia driver（如果有GPU显卡）
+nvidia-smi
+
+#   新建一个文件夹Software
+mkdir Software
+#   进入Software文件夹
+cd Software/
+#   新建一个文件夹Package
+mkdir Package
+#   进入Package
+cd Package
+#   新建一个文件夹GMX
+mkdir GMX
+mkdir 2021.2
+cd 2021.2/
+
+ 
+
+# Download package
+wget https://ftp.gromacs.org/gromacs/gromacs-2021.2.tar.gz
+wget https://ftp.gromacs.org/regressiontests/regressiontests-2021.2.tar.gz
+tar -xvzf gromacs-2021.2.tar.gz
+tar -xvzf regressiontests-2021.2.tar.gz
+
+
+# cmake when you have GPU with proper driver/cuda
+mkdir build-001
+cd build-001
+cmake ../gromacs-2021.2 \
+  -DGMX_BUILD_OWN_FFTW=ON \
+  -DREGRESSIONTEST_DOWNLOAD=OFF \
+  -DREGRESSIONTEST_PATH=../regressiontests-2021.2 \
+  -DCMAKE_C_COMPILER=gcc \
+  -DGMX_GPU=CUDA \
+  -DCMAKE_INSTALL_PREFIX=~/Software/GMX/2021.2-cuda
+#change the INSTALL_PREFIX according to your need
+
+
+
+
+# cmake CPU version
+mkdir build-001
+cd build-001
+cmake ../gromacs-2021.2 \
+  -DGMX_BUILD_OWN_FFTW=ON \
+  -DREGRESSIONTEST_DOWNLOAD=OFF \
+  -DREGRESSIONTEST_PATH=../regressiontests-2021.2 \
+  -DCMAKE_C_COMPILER=gcc \
+  -DCMAKE_INSTALL_PREFIX=~/Software/GMX/2021.2-CPU2
+#change the INSTALL_PREFIX according to your need
+
+# build - test - install
+# build
+make -j 14 #14 cores will be used here, you can use more
+
+# test
+make check
+
+# Install
+make install
+
+#配置环境变量
+cd
+source Software/GMX/2021.2-CPU2/bin/GMXRC
+
+source /home/lixin347/Software/GMX/2021.2-CPU2/bin/GMXRC
+nano .bashrc
+
+在最后输入
+### Gmx 2021.2
+source /home/lixin347/Software/GMX/2021.2-CPU2/bin/GMXRC
+ctrl+o 保存
+enter退出
+
+

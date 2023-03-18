@@ -1,0 +1,47 @@
+nohup ./check_entry_number.sh
+窗口命令
+chmod +x launch.sh
+./launch.sh
+
+3: You should have Xmgrace installed on your linux system. If not, you can install Xmgrace on debian based systems like Ubuntu and BOSS linux by using terminal and typing following command sudo apt-get install grace
+Step 4: The new version of the tool requires SHC Shell Compiler installed. So, use the following commands to install SHC Shell Compiler on your linux machine. First, sudo add-apt-repository ppa:neurobin/ppa second sudo apt-get update and then sudo apt-get install shc
+
+
+HeroMDanalysis环境准备
+1.wsl子系统下载（windows store下载即可）
+2.在linux系统上安装2019.4或更高的GROMACS
+3.linux系统下安装图形化应用程序
+##To check that you have the latest package lists, type:
+sudo apt update
+##Then, start with some basic X11 applications:
+sudo apt install x11-apps
+4.安装SHC shell编译器
+sudo add-apt-repository ppa:neurobin/ppa
+sudo apt-get update
+sudo apt-get install shc
+5.安装Zip和Unzip
+##for zip
+sudo apt-get install zip
+## for unzip
+sudo apt-get install unzip
+6.安装Zenity
+sudo apt-get update -y
+sudo apt-get install -y zenity
+7.安装Xmgrace
+sudo apt-get install -y grace
+
+数据分析
+
+##将DAI_2文件从C盘移到linux子系统中       
+mv /mnt/c/DAI_2 /home/lixin347
+
+#进入相应的文件夹
+cd /home/lixin347/DAI_2
+
+chmod +x launch_module1.sh
+
+DISPLAY=:0 ./launch_module1.sh
+
+mv /home/lixin347/DAI_2 /mnt/c/DAI_2
+
+
